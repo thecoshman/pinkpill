@@ -37,7 +37,8 @@ sub loadConfigFile{
     # Currently not using any paramaters
     # my %params = @_;
     my $config_file = $this{'config_file'};
-    open CONFIG, $config_file;
+    #  If the file cannot be opened to read, we will not worry about, perhaps a config file is not being used
+    push @{$this->{'error_messages'}}, "Config file could no be opened" and return $this unless open CONFIG, $config_file;
     while (<CONFIG>){
         next if /^\s*#/;
         my ($key, $value) = split(/\s*=\s*/,$_,2);
@@ -60,16 +61,16 @@ sub set_option{
 sub build{
     $this = shift;
     fancy_header();
-    $this->{'error_string'} = "Failed to create folders" and return 0
+    push @{$this->{'error_messages'}}, "Failed to create folders" and return 0
         unless $this->ensure_folders_exist();
 
-    $this->{'error_string'} = "faied to compile files!" and return 0
+    push @{$this->{'error_messages'}}, "faied to compile files!" and return 0
         unless $this->compile_files();
 
-    $this->{'error_string'} = "faied to link!" and return 0
+    push @{$this->{'error_messages'}}, "faied to link!" and return 0
         unless $this->link_program();
 
-    delete $this->{'error_string'};
+    delete $this->{'error_messages'};
     return 1;
 }
 
