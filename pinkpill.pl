@@ -4,7 +4,10 @@ use warnings;
 use PinkPill;
 
 my $pp = new PinkPill;
-$pp->set_options(src_folder => '../thecoshman-kyrostat/src');
+$pp->set_options(
+    src_folder => '../thecoshman-kyrostat/src',
+    compilers_flags => '-std=C++0x -Wall -Wextra',
+);
 $, = "\n";
 #my @options = PinkPill->config_options();
 #print @options;

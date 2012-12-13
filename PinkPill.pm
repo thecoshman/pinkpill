@@ -11,6 +11,7 @@ my %default_config = (
     build_folder => 'bin/obj',
     compiler => 'gcc',
     verbose => 'on',
+    compiler_flags => '',
 );
 my $pp_version = '0.0.1';
 
@@ -34,9 +35,44 @@ sub Init {
     for (keys %default_config){
         $this->{$_} = $default_config{$_};
     }
+    $this->negotiate_platform;
     return $this;
 }
 
+sub negotiate_platform{
+    my $this = shift;
+    my %OS_mappings = (
+        dos => 'Windows',
+        os2 => 'Windows',
+        MSWin32 => 'Windows',
+        cygwin => 'Windows',
+        darwin => 'OSx',
+#        aix => 'Linux',
+#        bsdos => 'Linux',
+#        dgux => 'Linux',
+#        dynixptx => 'Linux',
+#        freebsd => 'Linux',
+#        haiku => 'Linux',
+        linux => 'Linux',
+#        hpux => 'Linux',
+#        irix => 'Linux',
+#        next => 'Linux',
+#        openbsd => 'Linux',
+#        dec_osf => 'Linux',
+#        svr4 => 'Linux',
+#        unicos => 'Linux',
+#        unicosmk => 'Linux',
+#        solaris => 'Linux',
+#        sunos => 'Linux',
+    );
+    my %Arch_mappings = (
+        'MSWin32-x86' => 'x86',
+        'MSWin32-x64' => 'x64',
+    );
+    exist $OS_mappings{$^O} and $this->{Current_OS} = $OS_mappings{$^O} or die
+        "$^O is not currently a supported platform. If you think it should or is, please report this.";
+    return 1;
+}
 # allows user to pass in the config file to load, or just use the default one
 sub loadConfigFile{
     my $this = shift;
@@ -60,6 +96,9 @@ sub set_options{
     my %params = @_;
     for (keys %default_config){
         $this->{$_} = $params{$_} if exists $params{$_};
+    }
+    for (keys %params){
+        push @{$this->{error_messages}}, "The setting '$_' is not supprted" unless exists $default_config{$_};
     }
     $this->{verbose} = '0' if $this->{verbose} eq 'off';
     return $this;
@@ -119,6 +158,27 @@ sub link_program{
     my $this  = shift;
     print "link_program\nThis is a stub\nThis function still needs to be fleshed out\n";
     return 0;
+}
+
+sub parse_folder_matching_string{
+    my $folder_match_string = $_[0];
+    my %results = (
+        include => [],
+        exclude => []
+    );
+    for ($folder_match_string){
+        # if this has no meta data, just add it the include list and move on
+        push @results->{include}, $_ and next unless /.*^/;
+        my ($meta_data, $folder) = /(.*)^(.*)/;
+        my $escape_string;
+        ($meta_data, $escape_string) = $meta_data =~ /(.*)~(.*)^/;
+        $folder = $escape_string . $folder;
+        # These two I want to take the last instance of the match, hence the '.*' at the start of the pattern
+        my ($OS) = $meta_data =~ /.*((win|nix|osx))/;
+        my ($platform) = $meta_data =~ /.*((x86|x64))/;
+
+    }
+    return 
 }
 
 # Can be used to get the list of options that can be set
