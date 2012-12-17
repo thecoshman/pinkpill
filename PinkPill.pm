@@ -140,17 +140,26 @@ sub ensure_folders_exist{
 sub compile_files{
     my $this = shift;
     local $, = "\n";
-    my @files = files_in_folder($this->{src_folder});
-    print "List of all files:\n" if $this->{verbose} eq 'on';
-    print @files;
+    print "parsing src_folder string '$this->{src_folder}'\n" if $this->{verbose} eq 'on';
+    my %src_folders_to_search = parse_folder_matching_string($this->{src_folder});
+    my @files;
+    for(@src_folders_to_search->{include}){
+        print "Generating list of files in '$_'\n" if $this->{verbose} eq 'on';
+        push @files, files_in_folder($_, @src_folders_to_search->{exclude});
+    }    
+    print "parsing inc_folder string '$this->{inc_folder}'\n" if $this->{verbose} eq 'on';
+    my $include_folders;
+    for (parse_folder_matching_string($this->{src_folder})->{include}){
+        $include_folders .= $_ . " ";
+    }
+    print "List of all files:\n" and print @files if $this->{verbose} eq 'on';
     # get a list of all files that end in the '.cpp' extension
     my @cpp_files = grep { /\.c[p\+]{2}$/ } @files;
     print @cpp_files;
     for (@cpp_files){
-        print "Compiling - $_" if $this->{verbose} eq 'on';
-        my $external_command = $this->{compiler} . ' ' . $_ . '-I ' . $this->{inc_folder};
+        my $external_command = $this->{compiler} . ' ' . $_ . '-I ' . $include_folders;
+        print "Compiling - $_\n    running the command > $external_command\n" if $this->{verbose} eq 'on';
     }
-
     push @{$this->{error_messages}}, "Compilation process is still WIP";
     return 0;
 }
@@ -171,7 +180,7 @@ sub parse_folder_matching_string{
     );
     for (@folder_elements){
         # if this has no meta data, just add it the include list and move on
-        push @results->{include}, $_ and next unless /.*^/;
+        push @results->{include}, $_ and next unless scalar(/^/);
         my ($meta_data, $folder, $escape_string);
         # these two refex matches should up the last ^ or ~ character, but not capture them
         ($meta_data, $folder) = /(.*)^(.*)/;
@@ -202,9 +211,10 @@ sub config_options{
 }
 
 # This is no intended to be a class/instance function, it is to be used as just a free function
+# currently a lot of debug stuff being printed that will need to be removed at some stage
 sub files_in_folder{
     my $folder = shift;
-    print "Generating list of files in '$folder'\n" if $this->{verbose} eq 'on';
+    my @exlude = @_;
     opendir FOLDER, $folder;
     my @files;
     while (readdir FOLDER){
