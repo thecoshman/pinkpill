@@ -69,10 +69,11 @@ sub negotiate_platform{
         'MSWin32-x86' => 'x86',
         'MSWin32-x64' => 'x64',
     );
-    exist $OS_mappings{$^O} and $this->{Current_OS} = $OS_mappings{$^O} or die
+    exists $OS_mappings{$^O} and $this->{Current_OS} = $OS_mappings{$^O} or die
         "$^O is not currently a supported platform. If you think it should or is, please report this.";
     return 1;
 }
+
 # allows user to pass in the config file to load, or just use the default one
 sub loadConfigFile{
     my $this = shift;
@@ -162,23 +163,29 @@ sub link_program{
 
 sub parse_folder_matching_string{
     my $folder_match_string = $_[0];
+    # use the fucnky AWK like feature of split
+    my @folder_elements = split " ", $folder_match_string;
     my %results = (
         include => [],
         exclude => []
     );
-    for ($folder_match_string){
+    for (@folder_elements){
         # if this has no meta data, just add it the include list and move on
         push @results->{include}, $_ and next unless /.*^/;
-        my ($meta_data, $folder) = /(.*)^(.*)/;
-        my $escape_string;
-        ($meta_data, $escape_string) = $meta_data =~ /(.*)~(.*)^/;
-        $folder = $escape_string . $folder;
-        # These two I want to take the last instance of the match, hence the '.*' at the start of the pattern
+        my ($meta_data, $folder, $escape_string);
+        # these two refex matches should up the last ^ or ~ character, but not capture them
+        ($meta_data, $folder) = /(.*)^(.*)/;
+        ($meta_data, $escape_string) = $meta_data =~ /(.*)~(.*)^/ and $folder = $escape_string . $folder if $meta_data =~ /~/;
+        # These two take the last instance of the match, hence the '.*' at the start of the pattern
         my ($OS) = $meta_data =~ /.*((win|nix|osx))/;
-        my ($platform) = $meta_data =~ /.*((x86|x64))/;
-
+        my ($arch) = $meta_data =~ /.*((x86|x64))/;
+        # next unless $OS eq *this os*
+        # next unless $arch eq *this arch*
+        my $exclude = $meta_data =~ /!/;
+        push @results->{exclude}, $folder if $exclude;
+        push @results->{include}, $folder unless $exclude;
     }
-    return 
+    return \%results;
 }
 
 # Can be used to get the list of options that can be set
