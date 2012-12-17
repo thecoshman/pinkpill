@@ -67,9 +67,23 @@ As a final point, it is important to consider how the pattern will be
 interpreted. When it is passed, it will be reduced to two lists, one for folders
  to search and one for folders to exlucde from searching. As the string is 
 passed, any details that relate to other platforms are droped, leaving only the 
-folders that are intended for this platform.
+folders that are intended for this platform. Each folder that is include in the 
+'include' set will be searched for independently, and each sub folder will be 
+cheacked for in the 'exclude' set. If a subfolder is in this 'exclude' set, it 
+will not be entered by the search functions. 
 
-For example, if you have the folder string 'foo/bar !win^foo win^bar', on 
-platforms other then Windows, this will search through no folders, as the 
-'!win^foo' will exclude the 'foo/bar' that you might think would be searched by 
-all platforms.
+For example, if you need to have platform specific code, and you kept it 
+contained to a folder structure such as
+
+/src
+  /generic_code <- the rest of your projects code
+  /platform <- contains just the four sub-folders
+    /common <- contains api and wrapper code
+    /windows
+    /linux
+    /osx
+
+you could use a folder search string such as  'src !^src/platform 
+src/platform/common win^src/platform/windows nix^src/platform/linux 
+osx^src/platform/osx' or 'src/generic_code src/platform/common 
+win^src/platform/windows nix^src/platform/linux osx^src/platform/osx'
