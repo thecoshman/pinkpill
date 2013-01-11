@@ -1,5 +1,6 @@
 #!/usr/bin/perl
 package PinkPill;
+use File::Path qw(make_path);
 
 # these default values should be private to this class
 my %default_config = (
@@ -131,8 +132,12 @@ sub ensure_folders_exist{
         unless -d $this->{src_folder};
     push @{$this->{error_messages}}, "Include folder '" . $this->{inc_folder} . "' not found" and return 0
         unless -d $this->{inc_folder};
-    mkdir $this->{build_folder} unless -d $this->{build_folder};
-    mkdir $this->{obj_folder} unless -d $this->{obj_folder};
+    #mkdir $this->{build_folder} unless -d $this->{build_folder};
+    push @{$this->{error_messages}}, "Build folder '" . $this->{build_folder} . "' could not be created" and return 0
+        unless -d $this->{src_folder} or make_path($this->{build_folder});
+    #mkdir $this->{obj_folder} unless -d $this->{obj_folder};
+    push @{$this->{error_messages}}, "Object folder '" . $this->{object_folder} . "' could not be created" and return 0
+        unless -d $this->{inc_folder} or make_path($this->{build_folder});
     return 1;
 }
 
@@ -143,7 +148,7 @@ sub compile_files{
     print "parsing src_folder string '$this->{src_folder}'\n" if $this->{verbose} eq 'on';
     my %src_folders_to_search = parse_folder_matching_string($this->{src_folder});
     my @files;
-    for(@src_folders_to_search->{include}){
+    for(@{$src_folders_to_search->{include}}){
         print "Generating list of files in '$_'\n" if $this->{verbose} eq 'on';
         push @files, files_in_folder($_, @src_folders_to_search->{exclude});
     }    
@@ -191,8 +196,8 @@ sub parse_folder_matching_string{
         # next unless $OS eq *this os*
         # next unless $arch eq *this arch*
         my $exclude = $meta_data =~ /!/;
-        push @results->{exclude}, $folder if $exclude;
-        push @results->{include}, $folder unless $exclude;
+        push @{$results->{exclude}}, $folder if $exclude;
+        push @{$results->{include}}, $folder unless $exclude;
     }
     return \%results;
 }
