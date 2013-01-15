@@ -129,15 +129,19 @@ sub build{
 sub ensure_folders_exist{
     my $this = shift;
     push @{$this->{error_messages}}, "Source folder '" . $this->{src_folder} . "' not found" and return 0
+        unless -e $this->{src_folder}
+    push @{$this->{error_messages}}, "Source folder '" . $this->{src_folder} . "' not actually a folder" and return 0
         unless -d $this->{src_folder};
+    push @{$this->{error_messages}}, "Include folder '" . $this->{inc_folder} . "' not actaully a folder" and return 0
+        unless -e $this->{src_folder}
     push @{$this->{error_messages}}, "Include folder '" . $this->{inc_folder} . "' not found" and return 0
         unless -d $this->{inc_folder};
     #mkdir $this->{build_folder} unless -d $this->{build_folder};
     push @{$this->{error_messages}}, "Build folder '" . $this->{build_folder} . "' could not be created" and return 0
-        unless -d $this->{src_folder} or make_path($this->{build_folder});
+        unless -e $this->{src_folder} and -d $this->{src_folder} or make_path($this->{build_folder});
     #mkdir $this->{obj_folder} unless -d $this->{obj_folder};
     push @{$this->{error_messages}}, "Object folder '" . $this->{object_folder} . "' could not be created" and return 0
-        unless -d $this->{inc_folder} or make_path($this->{build_folder});
+        unless -e $this->{src_folder} and -d $this->{inc_folder} or make_path($this->{build_folder});
     return 1;
 }
 
