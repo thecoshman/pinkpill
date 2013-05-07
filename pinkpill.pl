@@ -5,8 +5,10 @@ use PinkPill;
 
 my $pp = new PinkPill;
 $pp->set_options(
-    src_folder => '../thecoshman-kyrostat/src',
-    compilers_flags => '-std=C++0x -Wall -Wextra',
+    src_folder => 'src',
+    build_folder => 'bin',
+    obj_folder => 'obj',
+    compiler_flags => '-std=C++11 -Wall -Wextra',
 );
 $, = "\n";
 #my @options = PinkPill->config_options();

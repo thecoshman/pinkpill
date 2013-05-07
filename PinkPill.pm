@@ -9,7 +9,7 @@ my %default_config = (
     program_name => 'pinkpill_program',
     config_file => 'pinkpill.config',
     build_folder => 'bin',
-    build_folder => 'bin/obj',
+    obj_folder => 'bin/obj',
     compiler => 'gcc',
     verbose => 'on',
     compiler_flags => '',
@@ -128,16 +128,10 @@ sub build{
 
 sub ensure_folders_exist{
     my $this = shift;
-    push @{$this->{error_messages}}, "Source folder '" . $this->{src_folder} . "' not found" and return 0
-        unless -d $this->{src_folder};
-    push @{$this->{error_messages}}, "Include folder '" . $this->{inc_folder} . "' not found" and return 0
-        unless -d $this->{inc_folder};
-    #mkdir $this->{build_folder} unless -d $this->{build_folder};
     push @{$this->{error_messages}}, "Build folder '" . $this->{build_folder} . "' could not be created" and return 0
-        unless -d $this->{src_folder} or make_path($this->{build_folder});
-    #mkdir $this->{obj_folder} unless -d $this->{obj_folder};
-    push @{$this->{error_messages}}, "Object folder '" . $this->{object_folder} . "' could not be created" and return 0
-        unless -d $this->{inc_folder} or make_path($this->{build_folder});
+        unless -d $this->{build_folder} or make_path($this->{build_folder});
+    push @{$this->{error_messages}}, "Object folder '" . $this->{obj_folder} . "' could not be created" and return 0
+        unless -d $this->{obj_folder} or make_path($this->{obj_folder});
     return 1;
 }
 
