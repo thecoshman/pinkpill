@@ -4,8 +4,8 @@ use File::Path qw(make_path);
 
 # these default values should be private to this class
 my %default_config = (
-    src_folder => '.',
-    inc_folder => '.',
+    src_folders => '',
+    inc_folders => '',
     program_name => 'pinkpill_program',
     config_file => 'pinkpill.config',
     build_folder => 'bin',
@@ -70,8 +70,9 @@ sub negotiate_platform{
         'MSWin32-x86' => 'x86',
         'MSWin32-x64' => 'x64',
     );
-    exists $OS_mappings{$^O} and $this->{Current_OS} = $OS_mappings{$^O} or die
+    exists $OS_mappings{$^O} and $this->{current_OS} = $OS_mappings{$^O} or die
         "$^O is not currently a supported platform. If you think it should or is, please report this.";
+    print "platform determined to be '$this->current_OS}" if $this->{verbose} eq 'on';
     return 1;
 }
 
@@ -113,7 +114,7 @@ sub build{
     push @{$this->{error_messages}}, "Failed to create folders" and return 0
         unless $this->ensure_folders_exist();
 
-    print "Compiling all source files in source folder...\n" if $this->{verbose} eq 'on';
+    print "Compiling all source files in source folders...\n" if $this->{verbose} eq 'on';
     push @{$this->{error_messages}}, "Failed to compile files" and return 0
         unless $this->compile_files();
 
@@ -139,18 +140,18 @@ sub ensure_folders_exist{
 sub compile_files{
     my $this = shift;
     local $, = "\n";
-    print "parsing src_folder string '$this->{src_folder}'\n" if $this->{verbose} eq 'on';
-    my %src_folders_to_search = parse_folder_matching_string($this->{src_folder});
+    print "parsing src_folders string =>\n    $this->{src_folders}\n" if $this->{verbose} eq 'on';
+    my $src_folders_to_search = parse_folder_matching_string($this->{src_folders});
     my @files;
-    for(@{$src_folders_to_search->{include}}){
-        print "Generating list of files in '$_'\n" if $this->{verbose} eq 'on';
-        push @files, files_in_folder($_, @src_folders_to_search->{exclude});
+    print "=> @{$src_folders_to_search{include}} <=\n";
+    foreach (@src_folders_to_search{include}){
+        push @files, files_in_folder($_, @{src_folders_to_search{exclude}});
     }    
-    print "parsing inc_folder string '$this->{inc_folder}'\n" if $this->{verbose} eq 'on';
-    my $include_folders;
-    for (parse_folder_matching_string($this->{src_folder})->{include}){
-        $include_folders .= $_ . " ";
-    }
+#    print "parsing inc_folders string =>\n    $this->{inc_folders}\n" if $this->{verbose} eq 'on';
+#    my $include_folders;
+#    for (parse_folder_matching_string($this->{src_folders})->{include}){
+#        $include_folders .= $_ . " ";
+#    }
     print "List of all files:\n" and print @files if $this->{verbose} eq 'on';
     # get a list of all files that end in the '.cpp' extension
     my @cpp_files = grep { /\.c[p\+]{2}$/ } @files;
@@ -173,13 +174,19 @@ sub parse_folder_matching_string{
     my $folder_match_string = $_[0];
     # use the fucnky AWK like feature of split
     my @folder_elements = split " ", $folder_match_string;
+    print "folder elements: ", @folder_elements, "";
     my %results = (
         include => [],
         exclude => []
     );
     for (@folder_elements){
+        print "looking at $_\n" if $this->{verbose} eq 'on';
         # if this has no meta data, just add it the include list and move on
-        push @results->{include}, $_ and next unless scalar(/^/);
+        unless($_ =~ /\^/){
+            print "    including $_\n" if $this->{verbose} eq 'on';
+            push @results{include}, $_;
+            next;
+        }
         my ($meta_data, $folder, $escape_string);
         # these two refex matches should up the last ^ or ~ character, but not capture them
         ($meta_data, $folder) = /(.*)^(.*)/;
@@ -187,11 +194,14 @@ sub parse_folder_matching_string{
         # These two take the last instance of the match, hence the '.*' at the start of the pattern
         my ($OS) = $meta_data =~ /.*((win|nix|osx))/;
         my ($arch) = $meta_data =~ /.*((x86|x64))/;
-        # next unless $OS eq *this os*
+        unless($OS eq $this->{current_OS}){
+            print "    skipping, this OS is not $OS\n" if $this->{verbose} eq 'on';
+            next;
+        }
         # next unless $arch eq *this arch*
         my $exclude = $meta_data =~ /!/;
-        push @{$results->{exclude}}, $folder if $exclude;
-        push @{$results->{include}}, $folder unless $exclude;
+        push @results{exclude}, $folder if $exclude;
+        push @results{include}, $folder unless $exclude;
     }
     return \%results;
 }
@@ -209,10 +219,11 @@ sub config_options{
     return @options;
 }
 
-# This is no intended to be a class/instance function, it is to be used as just a free function
+# This is not intended to be a class/instance function, it is to be used as just a free function
 # currently a lot of debug stuff being printed that will need to be removed at some stage
 sub files_in_folder{
     my $folder = shift;
+    print "Generating list of files in '$folder'\n" if $this->{verbose} eq 'on';
     my @exlude = @_;
     opendir FOLDER, $folder;
     my @files;
