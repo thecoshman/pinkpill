@@ -36,25 +36,24 @@ sub Init {
     for (keys %default_config){
         $this->{$_} = $default_config{$_};
     }
-    $this->negotiate_platform;
     return $this;
 }
 
 sub negotiate_platform{
     my $this = shift;
     my %OS_mappings = (
-        dos => 'Windows',
-        os2 => 'Windows',
-        MSWin32 => 'Windows',
-        cygwin => 'Windows',
-        darwin => 'OSx',
+        dos => 'win',
+        os2 => 'win',
+        MSWin32 => 'win',
+        cygwin => 'win',
+        darwin => 'osx',
 #        aix => 'Linux',
 #        bsdos => 'Linux',
 #        dgux => 'Linux',
 #        dynixptx => 'Linux',
 #        freebsd => 'Linux',
 #        haiku => 'Linux',
-        linux => 'Linux',
+        linux => 'nix',
 #        hpux => 'Linux',
 #        irix => 'Linux',
 #        next => 'Linux',
@@ -72,7 +71,7 @@ sub negotiate_platform{
     );
     exists $OS_mappings{$^O} and $this->{current_OS} = $OS_mappings{$^O} or die
         "$^O is not currently a supported platform. If you think it should or is, please report this.";
-    print "platform determined to be '$this->current_OS}" if $this->{verbose} eq 'on';
+    $this->trace("    platform determined to be '$this->{current_OS}'\n");
     return 1;
 }
 
@@ -110,19 +109,21 @@ sub set_options{
 sub build{
     $this = shift;
     fancy_header();
-    print "Ensureing all expected folders exist...\n" if $this->{verbose} eq 'on';
+    $this->trace("Determining platform details...\n");
+    $this->negotiate_platform();
+    $this->trace("Ensureing all expected folders exist...\n");
     push @{$this->{error_messages}}, "Failed to create folders" and return 0
         unless $this->ensure_folders_exist();
 
-    print "Compiling all source files in source folders...\n" if $this->{verbose} eq 'on';
+    $this->trace("Compiling all source files in source folders...\n");
     push @{$this->{error_messages}}, "Failed to compile files" and return 0
         unless $this->compile_files();
 
-    print "Linking project...\n" if $this->{verbose} eq 'on';
+    $this->trace("Linking project...\n");
     push @{$this->{error_messages}}, "Failed to link program" and return 0
         unless $this->link_program();
 
-    print "Success\n" if $this->{verbose};
+    $this->trace("Success\n!");
     delete $this->{error_messages};
     return 1;
 }
@@ -140,25 +141,27 @@ sub ensure_folders_exist{
 sub compile_files{
     my $this = shift;
     local $, = "\n";
-    print "parsing src_folders string =>\n    $this->{src_folders}\n" if $this->{verbose} eq 'on';
+    $this->trace("parsing src_folders string =>\n");
+    $this->trace("    $this->{src_folders}\n");
     my $src_folders_to_search = parse_folder_matching_string($this->{src_folders});
     my @files;
-    print "=> @{$src_folders_to_search{include}} <=\n";
-    foreach (@src_folders_to_search{include}){
-        push @files, files_in_folder($_, @{src_folders_to_search{exclude}});
+    $this->trace("=> @{$src_folders_to_search{include}} <=\n");
+    for (@{$src_folders_to_search->{include}}){
+        push @files, files_in_folder($_, $src_folders_to_search{exclude});
     }    
 #    print "parsing inc_folders string =>\n    $this->{inc_folders}\n" if $this->{verbose} eq 'on';
 #    my $include_folders;
 #    for (parse_folder_matching_string($this->{src_folders})->{include}){
 #        $include_folders .= $_ . " ";
 #    }
-    print "List of all files:\n" and print @files if $this->{verbose} eq 'on';
+    $this->trace("List of all files:", @files);
     # get a list of all files that end in the '.cpp' extension
     my @cpp_files = grep { /\.c[p\+]{2}$/ } @files;
-    print @cpp_files;
+    $this->trace(@cpp_files);
     for (@cpp_files){
         my $external_command = $this->{compiler} . ' ' . $_ . '-I ' . $include_folders;
-        print "Compiling - $_\n    running the command > $external_command\n" if $this->{verbose} eq 'on';
+        $this->trace("Compiling - $_\n");
+        $this->trace("    running the command > $external_command\n");
     }
     push @{$this->{error_messages}}, "Compilation process is still WIP";
     return 0;
@@ -174,17 +177,17 @@ sub parse_folder_matching_string{
     my $folder_match_string = $_[0];
     # use the fucnky AWK like feature of split
     my @folder_elements = split " ", $folder_match_string;
-    print "folder elements: ", @folder_elements, "";
+    $this->trace("folder elements: ", @folder_elements, "");
     my %results = (
         include => [],
         exclude => []
     );
     for (@folder_elements){
-        print "looking at $_\n" if $this->{verbose} eq 'on';
+        $this->trace("looking at $_\n");
         # if this has no meta data, just add it the include list and move on
         unless($_ =~ /\^/){
-            print "    including $_\n" if $this->{verbose} eq 'on';
-            push @results{include}, $_;
+            $this->trace("    including $_\n");
+            push @{$results{include}}, $_;
             next;
         }
         my ($meta_data, $folder, $escape_string);
@@ -195,7 +198,7 @@ sub parse_folder_matching_string{
         my ($OS) = $meta_data =~ /.*((win|nix|osx))/;
         my ($arch) = $meta_data =~ /.*((x86|x64))/;
         unless($OS eq $this->{current_OS}){
-            print "    skipping, this OS is not $OS\n" if $this->{verbose} eq 'on';
+            $this->trace("    skipping, this OS is not $OS\n");
             next;
         }
         # next unless $arch eq *this arch*
@@ -223,15 +226,15 @@ sub config_options{
 # currently a lot of debug stuff being printed that will need to be removed at some stage
 sub files_in_folder{
     my $folder = shift;
-    print "Generating list of files in '$folder'\n" if $this->{verbose} eq 'on';
+    $this->trace("Generating list of files in '$folder'\n");
     my @exlude = @_;
     opendir FOLDER, $folder;
     my @files;
     while (readdir FOLDER){
-        print "$_\n";
+        $this->trace("$_\n");
         # skip '.' or '..' as these are not true files
         next if /^\.\.?$/;
-        print "it's not one of those dotty things\n";
+        $this->trace("it's not one of those dotty things\n");
         # if files, add 'folder/file' to the list of files 
         push @files, $folder . '/' . $_ if -f;
         # if folder, get all fiels in that folder, and for each retruned file add 'folder/file' to the list of files
@@ -243,16 +246,23 @@ sub files_in_folder{
 }
 
 sub fancy_header{
-    print "# - - - - - - - - - - - - - - - -\n";
-    print "# Welcome to the pinkpill build system\n";
-    print "# Version $pp_version\n";
-    print "# Written by thecoshman\n";
-    print "# - - - - - - - - - - - - - - - -\n\n";
+    $this->trace("# - - - - - - - - - - - - - - - -\n");
+    $this->trace("# Welcome to the pinkpill build system\n");
+    $this->trace("# Version $pp_version\n");
+    $this->trace("# Written by thecoshman\n");
+    $this->trace("# - - - - - - - - - - - - - - - -\n\n");
 }
 
 sub error_logs{
     my $this = shift;
     return @{$this->{error_messages}};
+}
+
+sub trace{
+  my $this = shift;
+  my @messages = @_;
+  print @messages if $this->{verbose} eq 'on';
+  # Could possibly add support for other forms logging, like to file...
 }
 
 1;
