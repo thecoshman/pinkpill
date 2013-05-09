@@ -145,9 +145,10 @@ sub compile_files{
     $this->trace("    $this->{src_folders}\n");
     my $src_folders_to_search = parse_folder_matching_string($this->{src_folders});
     my @files;
-    $this->trace("=> @{$src_folders_to_search{include}} <=\n");
+    $this->trace("=> @{$src_folders_to_search->{include}} <=\n");
+    $this->trace("=> @{$src_folders_to_search->{exclude}} <=\n");
     for (@{$src_folders_to_search->{include}}){
-        push @files, files_in_folder($_, $src_folders_to_search{exclude});
+        push @files, files_in_folder($_, @{$src_folders_to_search->{exclude}});
     }    
 #    print "parsing inc_folders string =>\n    $this->{inc_folders}\n" if $this->{verbose} eq 'on';
 #    my $include_folders;
@@ -177,16 +178,16 @@ sub parse_folder_matching_string{
     my $folder_match_string = $_[0];
     # use the fucnky AWK like feature of split
     my @folder_elements = split " ", $folder_match_string;
-    $this->trace("folder elements: ", @folder_elements, "");
+    $this->trace("folder elements: ", @folder_elements, "\n");
     my %results = (
         include => [],
         exclude => []
     );
     for (@folder_elements){
-        $this->trace("looking at $_\n");
+        $this->trace("parsing '$_'\n");
         # if this has no meta data, just add it the include list and move on
         unless($_ =~ /\^/){
-            $this->trace("    including $_\n");
+            $this->trace("    simple folder, including $_\n");
             push @{$results{include}}, $_;
             next;
         }
@@ -195,16 +196,23 @@ sub parse_folder_matching_string{
         ($meta_data, $folder) = /(.*)^(.*)/;
         ($meta_data, $escape_string) = $meta_data =~ /(.*)~(.*)^/ and $folder = $escape_string . $folder if $meta_data =~ /~/;
         # These two take the last instance of the match, hence the '.*' at the start of the pattern
-        my ($OS) = $meta_data =~ /.*((win|nix|osx))/;
-        my ($arch) = $meta_data =~ /.*((x86|x64))/;
-        unless($OS eq $this->{current_OS}){
-            $this->trace("    skipping, this OS is not $OS\n");
-            next;
+        if($meta_data =~ /(win|nix|osx)/){
+            $this->("    OS conditioal\n");
+            my ($OS) = $meta_data =~ /.*((win|nix|osx))/;
+            unless($OS eq $this->{current_OS}){
+                $this->trace("    skipping, this OS is not $OS\n");
+                next;
+            }
         }
-        # next unless $arch eq *this arch*
-        my $exclude = $meta_data =~ /!/;
-        push @results{exclude}, $folder if $exclude;
-        push @results{include}, $folder unless $exclude;
+        # my ($arch) = $meta_data =~ /.*((x86|x64))/;
+        $this->trace("    x86/x64 conditionals not yet supported\n");
+        if($meta_data =~ /!/){
+            $this->trace("    excluding $folder\n");
+            push @results{exclude}, $folder;
+        } else {
+            $this->trace("    including $folder\n");
+            push @results{include}, $folder;
+        }
     }
     return \%results;
 }
@@ -223,24 +231,27 @@ sub config_options{
 }
 
 # This is not intended to be a class/instance function, it is to be used as just a free function
-# currently a lot of debug stuff being printed that will need to be removed at some stage
 sub files_in_folder{
     my $folder = shift;
+    my @exclude = @_;
+    print "exclude:", @exclude, "\n";
     $this->trace("Generating list of files in '$folder'\n");
-    my @exlude = @_;
     opendir FOLDER, $folder;
     my @files;
-    while (readdir FOLDER){
-        $this->trace("$_\n");
-        # skip '.' or '..' as these are not true files
-        next if /^\.\.?$/;
-        $this->trace("it's not one of those dotty things\n");
+    FILELOOP: while (readdir FOLDER){
+        $this->trace("  $_ (meta folder) - skipping\n") and next if /^\.\.?$/;
+        $this->trace("  $_\n");
+
+        for $exclude_folder (@exclude){
+            $this->trace("Cheacking '$_' for exclusion against '$exclude_folder'\n");
+            next FILELOOP if $_ eq $exclude_folder;
+        }
         # if files, add 'folder/file' to the list of files 
         push @files, $folder . '/' . $_ if -f;
         # if folder, get all fiels in that folder, and for each retruned file add 'folder/file' to the list of files
         map { 
             push @files, $folder . '/' . $_; 
-        } files_in_folder($_) if -d;
+        } files_in_folder($_, \@exclude) if -d;
     }
     return @files;
 }
