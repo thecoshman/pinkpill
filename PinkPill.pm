@@ -145,8 +145,8 @@ sub compile_files{
     $this->trace("    $this->{src_folders}\n");
     my $src_folders_to_search = parse_folder_matching_string($this->{src_folders});
     my @files;
-    $this->trace("=> @{$src_folders_to_search->{include}} <=\n");
-    $this->trace("=> @{$src_folders_to_search->{exclude}} <=\n");
+    $this->trace("\nincluding: @{$src_folders_to_search->{include}}\n");
+    $this->trace("excluding: @{$src_folders_to_search->{exclude}}\n\n");
     for (@{$src_folders_to_search->{include}}){
         push @files, files_in_folder($_, @{$src_folders_to_search->{exclude}});
     }    
@@ -185,32 +185,33 @@ sub parse_folder_matching_string{
     );
     for (@folder_elements){
         $this->trace("parsing '$_'\n");
-        # if this has no meta data, just add it the include list and move on
         unless($_ =~ /\^/){
-            $this->trace("    simple folder, including $_\n");
+            # this has no meta data, just add it the include list and move on
+            $this->trace("    simple folder, including '$_'\n");
             push @{$results{include}}, $_;
             next;
         }
         my ($meta_data, $folder, $escape_string);
         # these two refex matches should up the last ^ or ~ character, but not capture them
-        ($meta_data, $folder) = /(.*)^(.*)/;
+        ($meta_data, $folder) = /(.*)\^(.*)/;
+        $this->trace("    meta data is '$meta_data'\n");
         ($meta_data, $escape_string) = $meta_data =~ /(.*)~(.*)^/ and $folder = $escape_string . $folder if $meta_data =~ /~/;
         # These two take the last instance of the match, hence the '.*' at the start of the pattern
         if($meta_data =~ /(win|nix|osx)/){
-            $this->("    OS conditioal\n");
+            $this->trace("    OS conditioal\n");
             my ($OS) = $meta_data =~ /.*((win|nix|osx))/;
             unless($OS eq $this->{current_OS}){
-                $this->trace("    skipping, this OS is not $OS\n");
+                $this->trace("    skipping, this OS is not '$OS'\n");
                 next;
             }
         }
         # my ($arch) = $meta_data =~ /.*((x86|x64))/;
         $this->trace("    x86/x64 conditionals not yet supported\n");
         if($meta_data =~ /!/){
-            $this->trace("    excluding $folder\n");
+            $this->trace("    excluding '$folder'\n");
             push @results{exclude}, $folder;
         } else {
-            $this->trace("    including $folder\n");
+            $this->trace("    including '$folder'\n");
             push @results{include}, $folder;
         }
     }
@@ -234,25 +235,28 @@ sub config_options{
 sub files_in_folder{
     my $folder = shift;
     my @exclude = @_;
-    print "exclude:", @exclude, "\n";
     $this->trace("Generating list of files in '$folder'\n");
     opendir FOLDER, $folder;
     my @files;
+    my $file;
     FILELOOP: while (readdir FOLDER){
         $this->trace("  $_ (meta folder) - skipping\n") and next if /^\.\.?$/;
         $this->trace("  $_\n");
 
         for $exclude_folder (@exclude){
-            $this->trace("Cheacking '$_' for exclusion against '$exclude_folder'\n");
+            #$this->trace("Cheacking '$_' for exclusion against '$exclude_folder'\n");
             next FILELOOP if $_ eq $exclude_folder;
         }
         # if files, add 'folder/file' to the list of files 
-        push @files, $folder . '/' . $_ if -f;
+        $file = $folder . '/' . $_;
+        push @files, $file if -f $file;
         # if folder, get all fiels in that folder, and for each retruned file add 'folder/file' to the list of files
         map { 
-            push @files, $folder . '/' . $_; 
+            $file = $folder . '/' . $_;
+            push @files, $file; 
         } files_in_folder($_, \@exclude) if -d;
     }
+    #$this->trace("About to return file list: ", @files, "\n");
     return @files;
 }
 
