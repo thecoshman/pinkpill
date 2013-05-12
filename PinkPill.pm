@@ -13,6 +13,7 @@ my %default_config = (
     compiler => 'gcc',
     verbose => 'on',
     compiler_flags => '',
+    stop_on_fail => 'on',
 );
 my $pp_version = '0.0.1';
 
@@ -154,17 +155,22 @@ sub compile_files{
     $this->trace("    $this->{inc_folders}\n") if $this->{verbose} eq 'on';
     my $include_folders = "";
     for (@{parse_folder_matching_string($this->{inc_folders})->{include}}){
-        $include_folders .= $_ . " ";
+        $include_folders .= ' -I ' . $_;
     }
     $this->trace("\nList of all files:", @files, "\n");
     # get a list of all files that end in the '.cpp' extension
     my @cpp_files = grep { /\.c[p\+]{2}$/ } @files;
     $this->trace("cpp files:", @cpp_files, "\n");
     for (@cpp_files){
-        my $external_command = $this->{compiler} . ' ' . $_;
-        $external_command .= ' -I ' . $include_folders unless $include_folders eq "";
-        $this->trace("    running the command > '$external_command'\n");
+        my $external_command = $this->{compiler} . ' ' . $this->{compiler_flags} . ' ' . $_;
+        $external_command .= $include_folders unless $include_folders eq "";
+        $this->trace("> $external_command\n");
         system($external_command);
+        my $result = $? >> 8;
+        if ($result != 0){
+            push @{$this->{error_messages}}, "Compilation of $_ failed";
+            return 0 if $this->{stop_on_fail} eq 'on';
+        }
     }
     push @{$this->{error_messages}}, "Compilation process is still WIP";
     return 0;
