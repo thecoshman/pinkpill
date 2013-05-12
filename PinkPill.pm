@@ -150,19 +150,21 @@ sub compile_files{
     for (@{$src_folders_to_search->{include}}){
         push @files, files_in_folder($_, @{$src_folders_to_search->{exclude}});
     }    
-#    print "parsing inc_folders string =>\n    $this->{inc_folders}\n" if $this->{verbose} eq 'on';
-#    my $include_folders;
-#    for (parse_folder_matching_string($this->{src_folders})->{include}){
-#        $include_folders .= $_ . " ";
-#    }
-    $this->trace("List of all files:", @files);
+    $this->trace("parsing inc_folders string =>\n");
+    $this->trace("    $this->{inc_folders}\n") if $this->{verbose} eq 'on';
+    my $include_folders = "";
+    for (@{parse_folder_matching_string($this->{inc_folders})->{include}}){
+        $include_folders .= $_ . " ";
+    }
+    $this->trace("\nList of all files:", @files, "\n");
     # get a list of all files that end in the '.cpp' extension
     my @cpp_files = grep { /\.c[p\+]{2}$/ } @files;
-    $this->trace(@cpp_files);
+    $this->trace("cpp files:", @cpp_files, "\n");
     for (@cpp_files){
-        my $external_command = $this->{compiler} . ' ' . $_ . '-I ' . $include_folders;
-        $this->trace("Compiling - $_\n");
-        $this->trace("    running the command > $external_command\n");
+        my $external_command = $this->{compiler} . ' ' . $_;
+        $external_command .= ' -I ' . $include_folders unless $include_folders eq "";
+        $this->trace("    running the command > '$external_command'\n");
+        system($external_command);
     }
     push @{$this->{error_messages}}, "Compilation process is still WIP";
     return 0;
@@ -178,7 +180,7 @@ sub parse_folder_matching_string{
     my $folder_match_string = $_[0];
     # use the fucnky AWK like feature of split
     my @folder_elements = split " ", $folder_match_string;
-    $this->trace("folder elements: ", @folder_elements, "\n");
+    #$this->trace("folder elements: ", @folder_elements, "\n");
     my %results = (
         include => [],
         exclude => []
