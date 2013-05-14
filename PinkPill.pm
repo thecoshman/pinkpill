@@ -162,7 +162,7 @@ sub compile_files{
     my @cpp_files = grep { /\.c[p\+]{2}$/ } @files;
     $this->trace("cpp files:", @cpp_files, "\n");
     for (@cpp_files){
-        my $external_command = $this->{compiler} . ' ' . $this->{compiler_flags} . ' ' . $_;
+        my $external_command = $this->{compiler} . ' -c ' . $this->{compiler_flags} . ' ' . $_;
         $external_command .= $include_folders unless $include_folders eq "";
         $this->trace("> $external_command\n");
         system($external_command);
