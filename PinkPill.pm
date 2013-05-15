@@ -162,7 +162,12 @@ sub compile_files{
     my @cpp_files = grep { /\.c[p\+]{2}$/ } @files;
     $this->trace("cpp files:", @cpp_files, "\n");
     for (@cpp_files){
-        my $external_command = $this->{compiler} . ' -c ' . $this->{compiler_flags} . ' ' . $_;
+        my ($input_folder, $input_file) = $_ =~ /(.*)\/(.*)\.c[p\+]{2}$/;
+        my $output_folder = $this->{obj_folder} . '/' . $input_folder;
+        push @{$this->{error_messages}}, "Object subfolder '$output_folder' could not be created" and return 0
+            unless -d $output_folder or make_path($output_folder);
+        my $output_file = $output_folder . '/' . $input_file . '.o';
+        my $external_command = $this->{compiler} . ' -c ' . $this->{compiler_flags} . ' ' . $_ . ' -o ' . $output_file;
         $external_command .= $include_folders unless $include_folders eq "";
         $this->trace("> $external_command\n");
         system($external_command);
@@ -172,8 +177,7 @@ sub compile_files{
             return 0 if $this->{stop_on_fail} eq 'on';
         }
     }
-    push @{$this->{error_messages}}, "Compilation process is still WIP";
-    return 0;
+    return 1;
 }
 
 sub link_program{
