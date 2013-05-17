@@ -4,8 +4,8 @@ use File::Path qw(make_path);
 
 # these default values should be private to this class
 my %default_config = (
-    src_folders => '',
-    inc_folders => '',
+    src_folders => 'code',
+    inc_folders => 'code',
     program_name => 'pinkpill_program',
     config_file => 'pinkpill.config',
     build_folder => 'bin',
@@ -15,7 +15,7 @@ my %default_config = (
     compiler_flags => '',
     stop_on_fail => 'on',
 );
-my $pp_version = '0.0.1';
+my $pp_version = '0.1.0';
 
 sub new{
     my $class_name = shift;
@@ -138,7 +138,6 @@ sub ensure_folders_exist{
     return 1;
 }
 
-# takes a list of files to compile
 sub compile_files{
     my $this = shift;
     local $, = "\n";
@@ -162,22 +161,45 @@ sub compile_files{
     my @cpp_files = grep { /\.c[p\+]{2}$/ } @files;
     $this->trace("cpp files:", @cpp_files, "\n");
     for (@cpp_files){
-        my ($input_folder, $input_file) = $_ =~ /(.*)\/(.*)\.c[p\+]{2}$/;
-        my $output_folder = $this->{obj_folder} . '/' . $input_folder;
-        push @{$this->{error_messages}}, "Object subfolder '$output_folder' could not be created" and return 0
-            unless -d $output_folder or make_path($output_folder);
-        my $output_file = $output_folder . '/' . $input_file . '.o';
-        my $external_command = $this->{compiler} . ' -c ' . $this->{compiler_flags} . ' ' . $_ . ' -o ' . $output_file;
-        $external_command .= $include_folders unless $include_folders eq "";
-        $this->trace("> $external_command\n");
-        system($external_command);
-        my $result = $? >> 8;
-        if ($result != 0){
+        unless ($this->compile($_, $include_folders)){
             push @{$this->{error_messages}}, "Compilation of $_ failed";
             return 0 if $this->{stop_on_fail} eq 'on';
         }
     }
     return 1;
+}
+
+# compiles one file to it's .o form
+sub compile{
+    my $this = shift;
+    my ($input_folder, $input_file) = folder_file(shift);
+    my $include_folders = shift;
+    my $output_folder = $this->{obj_folder} . $input_folder;
+    my ($output_file) = $output_folder . '/' . $input_file =~ /(.*)\.cpp/;
+    push @{$this->{error_messages}}, "Object subfolder '$output_folder' could not be created" and return 0
+        unless -d $output_folder or make_path($output_folder);
+    my $external_command = $this->{compiler} . ' -c ' . $this->{compiler_flags} . ' ' . $_ . ' -o ' . $output_file;
+    $external_command .= $include_folders unless $include_folders eq "";
+    system($external_command);
+    my $result = $? >> 8;
+    return 0 if $result != 0;
+    return 1;
+}
+
+# checks if *.cpp needs to be recompiled to *.o
+sub compilation_required{
+    my $this = shift;
+    my ($input_folder, $input_file) = folder_file(shift);
+    my $output_folder = $this->{obj_folder} . $input_folder;
+    my ($output_file) = $input_file =~ /(.*)\.cpp/;
+    $output_file .= '.o';
+    
+    return 1;
+}
+
+# not to be used as a member function
+sub folder_file{
+    return $_ =~ /(.*)\/(.*)$/;
 }
 
 sub link_program{
