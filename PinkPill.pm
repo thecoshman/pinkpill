@@ -1,6 +1,7 @@
 #!/usr/bin/perl
 package PinkPill;
 use File::Path qw(make_path);
+use File::Find;
 
 # these default values should be private to this class
 my %default_config = (
@@ -10,7 +11,7 @@ my %default_config = (
     config_file => 'pinkpill.config',
     build_folder => 'bin',
     obj_folder => 'bin/obj',
-    compiler => 'gcc',
+    compiler => 'g++',
     verbose => 'on',
     compiler_flags => '',
     stop_on_fail => 'on',
@@ -174,11 +175,13 @@ sub compile{
     my $this = shift;
     my ($input_folder, $input_file) = folder_file(shift);
     my $include_folders = shift;
-    my $output_folder = $this->{obj_folder} . $input_folder;
-    my ($output_file) = $output_folder . '/' . $input_file =~ /(.*)\.cpp/;
+    my $output_folder = $this->{obj_folder} . '/' . $input_folder;
+    my ($output_file) = $input_file =~ /(.*)\.cpp/;
+    $output_file = $output_folder . '/' . $output_file . '.o';
     push @{$this->{error_messages}}, "Object subfolder '$output_folder' could not be created" and return 0
         unless -d $output_folder or make_path($output_folder);
-    my $external_command = $this->{compiler} . ' -c ' . $this->{compiler_flags} . ' ' . $_ . ' -o ' . $output_file;
+    my $external_command = $this->{compiler} . ' -c ' . $this->{compiler_flags};
+    $external_command .= ' ' . $_ . ' -o ' . $output_file;
     $external_command .= $include_folders unless $include_folders eq "";
     system($external_command);
     my $result = $? >> 8;
@@ -204,7 +207,15 @@ sub folder_file{
 
 sub link_program{
     my $this  = shift;
-    print "link_program\nThis is a stub\nThis function still needs to be fleshed out\n";
+    my @object_files = ();
+    find(sub { push(@object_files, $File::Find::name) if $_ =~ /\.o$/; }, $this->{obj_folder});
+    my $external_command = $this->{compiler};
+    for(@object_files){
+        $external_command .= ' ' . $_;
+    }
+    $external_command .= ' -o ' . $this->{program_name};
+    $this->trace("> $external_command\n");
+    system($external_command);
     return 0;
 }
 
