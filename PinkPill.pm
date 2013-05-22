@@ -2,8 +2,8 @@
 package PinkPill;
 use File::Path qw(make_path);
 use File::Find;
-use File::BaseName;
-use File::Spec::Function;
+use File::Basename;
+use File::Spec::Functions;
 
 # these default values should be private to this class
 my %default_config = (
@@ -110,11 +110,11 @@ sub build{
     fancy_header();
     $this->trace("Determining platform details...\n");
     $this->negotiate_platform();
-    $this->trace("Ensureing all expected folders exist...\n");
+    $this->trace("\nEnsureing all expected folders exist...\n");
     push @{$this->{error_messages}}, "Failed to create folders" and return 0
         unless $this->ensure_folders_exist();
 
-    $this->trace("Compiling all source files in source folders...\n");
+    $this->trace("\nCompiling all source files in source folders...\n");
     push @{$this->{error_messages}}, "Failed to compile files" and return 0
         unless $this->compile_files();
 
@@ -139,12 +139,11 @@ sub ensure_folders_exist{
 sub compile_files{
     my $this = shift;
     local $, = "\n";
-    $this->trace("parsing src_folders string =>\n");
-    $this->trace("    $this->{src_folders}\n");
+    $this->trace("parsing src_folders string => $this->{src_folders}\n");
     my $src_folders_to_search = parse_folder_matching_string($this->{src_folders});
     my @files;
-    $this->trace("\nincluding: @{$src_folders_to_search->{include}}\n");
-    $this->trace("excluding: @{$src_folders_to_search->{exclude}}\n\n");
+    $this->trace("including folders: @{$src_folders_to_search->{include}}\n");
+    $this->trace("excluding folders: @{$src_folders_to_search->{exclude}}\n\n");
     for (@{$src_folders_to_search->{include}}){
         push @files, files_in_folder($_, @{$src_folders_to_search->{exclude}});
     }    
@@ -223,10 +222,10 @@ sub parse_folder_matching_string{
         exclude => []
     );
     for (@folder_elements){
-        $this->trace("parsing '$_'\n");
+        $this->trace("  examing token '$_'\n");
         unless($_ =~ /\^/){
             # this has no meta data, just add it the include list and move on
-            $this->trace("    simple folder, including '$_'\n");
+            $this->trace("    basic token, including '$_'\n");
             push @{$results{include}}, $_;
             next;
         }
@@ -237,7 +236,7 @@ sub parse_folder_matching_string{
         ($meta_data, $escape_string) = $meta_data =~ /(.*)~(.*)^/ and $folder = $escape_string . $folder if $meta_data =~ /~/;
         # These two take the last instance of the match, hence the '.*' at the start of the pattern
         if($meta_data =~ /(win|nix|osx)/){
-            $this->trace("    OS conditioal\n");
+            $this->trace("    OS conditional\n");
             my ($OS) = $meta_data =~ /.*((win|nix|osx))/;
             unless($OS eq $this->{current_OS}){
                 $this->trace("    skipping, this OS is not '$OS'\n");
@@ -287,10 +286,10 @@ sub files_in_folder{
             next FILELOOP if $_ eq $exclude;
         }
         # if files, add 'folder/file' to the list of files 
-        push @files, catfile($folder, $_) if -f;
+        push @files, catfile(($folder), $_) if -f;
         # if folder, get all fiels in that folder, and for each retruned file add 'folder/file' to the list of files
         map { 
-            $file = catfile($folder, $_);
+            $file = catfile(($folder), $_);
             push @files, $file; 
         } files_in_folder($_, \@excludes) if -d;
     }
