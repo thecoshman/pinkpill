@@ -2,6 +2,8 @@
 package PinkPill;
 use File::Path qw(make_path);
 use File::Find;
+use File::BaseName;
+use File::Spec::Function;
 
 # these default values should be private to this class
 my %default_config = (
@@ -17,7 +19,7 @@ my %default_config = (
     stop_on_fail => 'on',
     link_libraries => '',
 );
-my $pp_version = '0.1.0';
+my $pp_version = '0.2.0';
 
 sub new{
     my $class_name = shift;
@@ -33,9 +35,6 @@ sub new{
 # In theory, this could be called at any time to reset the class back to default
 sub Init {
     my $this = shift;
-    # my %params = @_;
-    # copy the default values into this object
-    #@this->{keys %default_config} = values %default_config;
     for (keys %default_config){
         $this->{$_} = $default_config{$_};
     }
@@ -78,11 +77,8 @@ sub negotiate_platform{
     return 1;
 }
 
-# allows user to pass in the config file to load, or just use the default one
-sub loadConfigFile{
+sub load_config_file{
     my $this = shift;
-    # Currently not using any paramaters
-    # my %params = @_;
     my $config_file = $this{'config_file'};
     #  If the file cannot be opened to read, we will not worry about, perhaps a config file is not being used
     push @{$this->{'error_messages'}}, "Config file could no be opened" and return $this unless open CONFIG, $config_file;
@@ -174,11 +170,10 @@ sub compile_files{
 # compiles one file to it's .o form
 sub compile{
     my $this = shift;
-    my ($input_folder, $input_file) = folder_file(shift);
+    my ($input_file, $input_folder, $input_suffix) = fileparse(shift);
     my $include_folders = shift;
-    my $output_folder = $this->{obj_folder} . '/' . $input_folder;
-    my ($output_file) = $input_file =~ /(.*)\.cpp/;
-    $output_file = $output_folder . '/' . $output_file . '.o';
+    my $output_folder = catfile($this->{obj_folder}, $input_folder);
+    my $output_file = catfile($output_folder, $input_file) . '.o';
     push @{$this->{error_messages}}, "Object subfolder '$output_folder' could not be created" and return 0
         unless -d $output_folder or make_path($output_folder);
     my $external_command = $this->{compiler} . ' -c ' . $this->{compiler_flags};
@@ -193,17 +188,12 @@ sub compile{
 # checks if *.cpp needs to be recompiled to *.o
 sub compilation_required{
     my $this = shift;
-    my ($input_folder, $input_file) = folder_file(shift);
-    my $output_folder = $this->{obj_folder} . $input_folder;
+    my ($input_file, $input_folder, $input_suffix) = fileparse(shift);
+    my $output_folder = catdir($this->{obj_folder}, $input_folder);
     my ($output_file) = $input_file =~ /(.*)\.cpp/;
     $output_file .= '.o';
     
     return 1;
-}
-
-# not to be used as a member function
-sub folder_file{
-    return $_ =~ /(.*)\/(.*)$/;
 }
 
 sub link_program{
@@ -228,7 +218,6 @@ sub parse_folder_matching_string{
     my $folder_match_string = $_[0];
     # use the fucnky AWK like feature of split
     my @folder_elements = split " ", $folder_match_string;
-    #$this->trace("folder elements: ", @folder_elements, "\n");
     my %results = (
         include => [],
         exclude => []
@@ -284,7 +273,7 @@ sub config_options{
 # This is not intended to be a class/instance function, it is to be used as just a free function
 sub files_in_folder{
     my $folder = shift;
-    my @exclude = @_;
+    my @excludes = @_;
     $this->trace("Generating list of files in '$folder'\n");
     opendir FOLDER, $folder;
     my @files;
@@ -293,18 +282,17 @@ sub files_in_folder{
         $this->trace("  $_ (meta folder) - skipping\n") and next if /^\.\.?$/;
         $this->trace("  $_\n");
 
-        for $exclude_folder (@exclude){
+        for $exclude (@excludes){
             #$this->trace("Cheacking '$_' for exclusion against '$exclude_folder'\n");
-            next FILELOOP if $_ eq $exclude_folder;
+            next FILELOOP if $_ eq $exclude;
         }
         # if files, add 'folder/file' to the list of files 
-        $file = $folder . '/' . $_;
-        push @files, $file if -f $file;
+        push @files, catfile($folder, $_) if -f;
         # if folder, get all fiels in that folder, and for each retruned file add 'folder/file' to the list of files
         map { 
-            $file = $folder . '/' . $_;
+            $file = catfile($folder, $_);
             push @files, $file; 
-        } files_in_folder($_, \@exclude) if -d;
+        } files_in_folder($_, \@excludes) if -d;
     }
     #$this->trace("About to return file list: ", @files, "\n");
     return @files;
