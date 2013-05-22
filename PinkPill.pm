@@ -15,6 +15,7 @@ my %default_config = (
     verbose => 'on',
     compiler_flags => '',
     stop_on_fail => 'on',
+    link_libraries => '',
 );
 my $pp_version = '0.1.0';
 
@@ -212,6 +213,10 @@ sub link_program{
     my $external_command = $this->{compiler};
     for(@object_files){
         $external_command .= ' ' . $_;
+    }
+    my @libraries = split " ", $this->{link_libraries};
+    for(@libraries){
+        $external_command .= " -l" . $_;
     }
     $external_command .= ' -o ' . $this->{program_name};
     $this->trace("> $external_command\n");
