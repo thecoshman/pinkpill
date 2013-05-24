@@ -118,7 +118,7 @@ sub build{
     push @{$this->{error_messages}}, "Failed to compile files" and return 0
         unless $this->compile_files();
 
-    $this->trace("Linking project...\n");
+    $this->trace("\nLinking project...\n");
     push @{$this->{error_messages}}, "Failed to link program" and return 0
         unless $this->link_program();
 
@@ -147,8 +147,7 @@ sub compile_files{
     for (@{$src_folders_to_search->{include}}){
         push @files, files_in_folder($_, @{$src_folders_to_search->{exclude}});
     }    
-    $this->trace("parsing inc_folders string =>\n");
-    $this->trace("    $this->{inc_folders}\n") if $this->{verbose} eq 'on';
+    $this->trace("\nparsing inc_folders string => $this->{inc_folders}\n");
     my $include_folders = "";
     for (@{parse_folder_matching_string($this->{inc_folders})->{include}}){
         $include_folders .= ' -I ' . $_;
@@ -178,6 +177,7 @@ sub compile{
     my $external_command = $this->{compiler} . ' -c ' . $this->{compiler_flags};
     $external_command .= ' ' . $_ . ' -o ' . $output_file;
     $external_command .= $include_folders unless $include_folders eq "";
+    $this->trace("> " . $external_command . "\n");
     system($external_command);
     my $result = $? >> 8;
     return 0 if $result != 0;
@@ -274,26 +274,23 @@ sub files_in_folder{
     my $folder = shift;
     my @excludes = @_;
     $this->trace("Generating list of files in '$folder'\n");
-    opendir FOLDER, $folder;
+    opendir FOLDER, $folder or $this->trace("=][= failed to opend '$folder'\n");
     my @files;
-    my $file;
     FILELOOP: while (readdir FOLDER){
         $this->trace("  $_ (meta folder) - skipping\n") and next if /^\.\.?$/;
         $this->trace("  $_\n");
+        my $listing = $folder . '/' . $_;
 
         for $exclude (@excludes){
             #$this->trace("Cheacking '$_' for exclusion against '$exclude_folder'\n");
-            next FILELOOP if $_ eq $exclude;
+            next FILELOOP if $listing eq $exclude;
         }
         # if files, add 'folder/file' to the list of files 
-        push @files, catfile(($folder), $_) if -f;
+        push @files, $listing if -f $listing;
         # if folder, get all fiels in that folder, and for each retruned file add 'folder/file' to the list of files
-        map { 
-            $file = catfile(($folder), $_);
-            push @files, $file; 
-        } files_in_folder($_, \@excludes) if -d;
+        push @files, files_in_folder($listing, \@excludes) if -d $listing;
     }
-    #$this->trace("About to return file list: ", @files, "\n");
+    #$this->trace("  About to return file list: ", @files, "\n");
     return @files;
 }
 
