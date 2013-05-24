@@ -17,10 +17,11 @@ my %default_config = (
     verbose => 'on',
     compiler_flags => '',
     stop_on_fail => 'on',
+    linker_flags => '',
     link_libraries => '',
     mode => 'executable',
 );
-my $pp_version = '0.2.0';
+my $pp_version = '0.3.0';
 
 sub new{
     my $class_name = shift;
@@ -178,6 +179,7 @@ sub compile_files{
 sub compile{
     my $this = shift;
     my ($input_file, $input_folder, $input_suffix) = fileparse(shift);
+    $input_file =~ s/\.cpp//;
     my $include_folders = shift;
     my $output_folder = catfile($this->{obj_folder}, $input_folder);
     my $output_file = catfile($output_folder, $input_file) . '.o';
@@ -207,7 +209,7 @@ sub compilation_required{
 sub link_program{
     my $this  = shift;
     my @object_files = $this->find_object_files();
-    my $external_command = $this->{compiler};
+    my $external_command = $this->{compiler} . ' ' . $this->{linker_flags};
     for(@object_files){
         $external_command .= ' ' . $_;
     }
