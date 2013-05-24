@@ -18,6 +18,7 @@ my %default_config = (
     compiler_flags => '',
     stop_on_fail => 'on',
     link_libraries => '',
+    mode => 'executable',
 );
 my $pp_version = '0.2.0';
 
@@ -118,11 +119,19 @@ sub build{
     push @{$this->{error_messages}}, "Failed to compile files" and return 0
         unless $this->compile_files();
 
-    $this->trace("\nLinking project...\n");
-    push @{$this->{error_messages}}, "Failed to link program" and return 0
-        unless $this->link_program();
+    if($this->{mode} eq 'executable'){
+        $this->trace("\nLinking project...\n");
+        push @{$this->{error_messages}}, "Failed to link program" and return 0
+            unless $this->link_program();
+    } elsif ($this->{mode} eq 'static'){
+        $this->trace("\nCreating static library...\n");
+        push @{$this->{error_messages}}, "Failed to build library" and return 0
+            unless $this->build_static_library();
+    } else {
+        $this->trace("\nNo post compile process selected ('$this->{mode}')\n");
+    }
 
-    $this->trace("Success\n!");
+    $this->trace("\nSuccess!\n\n");
     delete $this->{error_messages};
     return 1;
 }
@@ -197,8 +206,7 @@ sub compilation_required{
 
 sub link_program{
     my $this  = shift;
-    my @object_files = ();
-    find(sub { push(@object_files, $File::Find::name) if $_ =~ /\.o$/; }, $this->{obj_folder});
+    my @object_files = $this->find_object_files();
     my $external_command = $this->{compiler};
     for(@object_files){
         $external_command .= ' ' . $_;
@@ -211,6 +219,26 @@ sub link_program{
     $this->trace("> $external_command\n");
     system($external_command);
     return 0;
+}
+
+sub build_static_library{
+    my $this = shift;
+    my @object_files = $this->find_object_files();
+    my $external_command = 'ar rcs ' . $this->{build_folder} . '/';
+    $external_command .= 'lib' . $this->{program_name} . '.a';
+    for(@object_files){
+        $external_command .= ' ' . $_;
+    }
+    $this->trace("> $external_command\n");
+    system($external_command);
+    return 1;
+}
+
+sub find_object_files{
+    my $this = shift;
+    my @object_files = ();
+    find(sub { push(@object_files, $File::Find::name) if $_ =~ /\.o$/; }, $this->{obj_folder});
+    return @object_files;
 }
 
 sub parse_folder_matching_string{
@@ -274,7 +302,7 @@ sub files_in_folder{
     my $folder = shift;
     my @excludes = @_;
     $this->trace("Generating list of files in '$folder'\n");
-    opendir FOLDER, $folder or $this->trace("=][= failed to opend '$folder'\n");
+    opendir FOLDER, $folder or $this->trace("=][= failed to open '$folder'\n");
     my @files;
     FILELOOP: while (readdir FOLDER){
         $this->trace("  $_ (meta folder) - skipping\n") and next if /^\.\.?$/;
