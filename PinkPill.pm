@@ -21,7 +21,7 @@ my %default_config = (
     link_libraries => '',
     mode => 'executable',
 );
-my $pp_version = '0.3.0';
+my $pp_version = '0.4.0';
 
 sub new{
     my $class_name = shift;
@@ -164,7 +164,8 @@ sub compile_files{
     }
     $this->trace("\nList of all files:", @files, "\n");
     # get a list of all files that end in the '.cpp' extension
-    my @cpp_files = grep { /\.c[p\+]{2}$/ } @files;
+    #my @cpp_files = grep { /\.c[p\+]{2}$/ } @files;
+    my @cpp_files = grep { /\.c([p\+]{2})?$/ } @files;
     $this->trace("cpp files:", @cpp_files, "\n");
     for (@cpp_files){
         unless ($this->compile($_, $include_folders)){
@@ -179,7 +180,7 @@ sub compile_files{
 sub compile{
     my $this = shift;
     my ($input_file, $input_folder, $input_suffix) = fileparse(shift);
-    $input_file =~ s/\.cpp//;
+    $input_file =~ s/\.c([p\+]{2})?$//;
     my $include_folders = shift;
     my $output_folder = catfile($this->{obj_folder}, $input_folder);
     my $output_file = catfile($output_folder, $input_file) . '.o';
@@ -198,12 +199,12 @@ sub compile{
 # checks if *.cpp needs to be recompiled to *.o
 sub compilation_required{
     my $this = shift;
+    return 1;
+
     my ($input_file, $input_folder, $input_suffix) = fileparse(shift);
     my $output_folder = catdir($this->{obj_folder}, $input_folder);
-    my ($output_file) = $input_file =~ /(.*)\.cpp/;
+    my ($output_file) = $input_file =~ /(.*)\.c([p\+]{2})?$/;
     $output_file .= '.o';
-    
-    return 1;
 }
 
 sub link_program{
@@ -304,7 +305,12 @@ sub files_in_folder{
     my $folder = shift;
     my @excludes = @_;
     $this->trace("Generating list of files in '$folder'\n");
-    opendir FOLDER, $folder or $this->trace("=][= failed to open '$folder'\n");
+    if (-f $folder){
+        $this->trace("  this is a file, I assume you want it compiled\n");
+        return ($folder);
+    }
+    
+    opendir FOLDER, $folder or $this->trace("  failed to open '$folder'\n");
     my @files;
     FILELOOP: while (readdir FOLDER){
         $this->trace("  $_ (meta folder) - skipping\n") and next if /^\.\.?$/;
