@@ -20,8 +20,9 @@ my %default_config = (
     linker_flags => '',
     link_libraries => '',
     mode => 'executable',
+    dep_info => 'dep_info',
 );
-my $pp_version = '0.4.0';
+my $pp_version = '0.5.0';
 
 sub new{
     my $class_name = shift;
@@ -143,6 +144,8 @@ sub ensure_folders_exist{
         unless -d $this->{build_folder} or make_path($this->{build_folder});
     push @{$this->{error_messages}}, "Object folder '" . $this->{obj_folder} . "' could not be created" and return 0
         unless -d $this->{obj_folder} or make_path($this->{obj_folder});
+    push @{$this->{error_messages}}, "Dependency information folder '" . $this->{dep_info} . "' could not be created" and return 0
+        unless -d $this->{dep_info} or make_path($this->{dep_info});
     return 1;
 }
 
@@ -168,8 +171,10 @@ sub compile_files{
     my @cpp_files = grep { /\.c([p\+]{2})?$/ } @files;
     $this->trace("cpp files:", @cpp_files, "\n");
     for (@cpp_files){
+        my $source = $_;
+        $this->trace("Skipping '$source', all ready up-to-date\n") and next unless $this->compilation_required($source);
         unless ($this->compile($_, $include_folders)){
-            push @{$this->{error_messages}}, "Compilation of $_ failed";
+            push @{$this->{error_messages}}, "Compilation of $source failed";
             return 0 if $this->{stop_on_fail} eq 'on';
         }
     }
@@ -180,15 +185,23 @@ sub compile_files{
 sub compile{
     my $this = shift;
     my ($input_file, $input_folder, $input_suffix) = fileparse(shift);
-    $input_file =~ s/\.c([p\+]{2})?$//;
     my $include_folders = shift;
+    $input_file =~ s/\.c([p\+]{2})?$//;
+    
     my $output_folder = catfile($this->{obj_folder}, $input_folder);
-    my $output_file = catfile($output_folder, $input_file) . '.o';
     push @{$this->{error_messages}}, "Object subfolder '$output_folder' could not be created" and return 0
         unless -d $output_folder or make_path($output_folder);
-    my $external_command = $this->{compiler} . ' -c ' . $this->{compiler_flags};
+    my $output_file = catfile($output_folder, $input_file) . '.o';
+    
+    my $dep_info_folder = catfile($this->{dep_info}, $input_folder);
+    push @{$this->{error_messages}}, "Dependency information subfolder '$dep_info_folder' could not be created" and return 0
+        unless -d $dep_info_folder or make_path($dep_info_folder);
+    my $dep_info_file = catfile($dep_info_folder, $input_file) . '.d';
+
+    my $external_command = $this->{compiler} . ' -MMD -MF ' . $dep_info_file;
+    $external_command .= ' -c ' . $this->{compiler_flags};
     $external_command .= ' ' . $_ . ' -o ' . $output_file;
-    $external_command .= $include_folders unless $include_folders eq "";
+    $external_command .= $include_folders;
     $this->trace("> " . $external_command . "\n");
     system($external_command);
     my $result = $? >> 8;
@@ -199,12 +212,27 @@ sub compile{
 # checks if *.cpp needs to be recompiled to *.o
 sub compilation_required{
     my $this = shift;
-    return 1;
+    my $mtime = 9; # It is field nine from 'stat' that contains the modified time for a file
+    my $input = shift;
+    my $output_file = catfile($this->{obj_folder}, $input);
+    $output_file =~  s/\.c([p\+]{2})?$/\.o/;
 
-    my ($input_file, $input_folder, $input_suffix) = fileparse(shift);
-    my $output_folder = catdir($this->{obj_folder}, $input_folder);
-    my ($output_file) = $input_file =~ /(.*)\.c([p\+]{2})?$/;
-    $output_file .= '.o';
+    my $dep_info_file = catfile($this->{dep_info}, $input);
+    $dep_info_file =~ s/\.c([p\+]{2})?$/\.d/;
+
+    my $obj_last_modified = (stat($dep_info_file))[$mtime];
+    my $dep_last_modified = (stat($input))[$mtime];
+    $this->trace("found a newer file!\n") and return 1 if $obj_last_modified < $dep_last_modified;
+    return 1 unless -f $dep_info_file and open DEP, $dep_info_file;
+    my $dep = <DEP>; # This first line is output file and the input file, we just checked this
+    while(<DEP>){
+        $dep = $_;
+        $dep =~ s/^\s*//;
+        $dep =~ s/\s*\\?\s*$/\n/;
+        $dep_last_modified = (stat($_))[$mtime];
+        $this->trace("found a newer file!\n") and return 1 if $obj_last_modified < $dep_last_modified;
+    }
+    return 0;
 }
 
 sub link_program{
@@ -221,7 +249,9 @@ sub link_program{
     $external_command .= ' -o ' . $this->{program_name};
     $this->trace("> $external_command\n");
     system($external_command);
-    return 0;
+    my $result = $? >> 8;
+    return 0 if $result != 0;
+    return 1;
 }
 
 sub build_static_library{
