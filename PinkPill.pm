@@ -22,7 +22,7 @@ my %default_config = (
     mode => 'executable',
     dep_info => 'dep_info',
 );
-my $pp_version = '0.5.0';
+my $pp_version = '0.6.0';
 
 sub new{
     my $class_name = shift;
@@ -166,15 +166,11 @@ sub compile_files{
         $include_folders .= ' -I ' . $_;
     }
     $this->trace("\nList of all files:", @files, "\n");
-    # get a list of all files that end in the '.cpp' extension
-    #my @cpp_files = grep { /\.c[p\+]{2}$/ } @files;
     my @cpp_files = grep { /\.c([p\+]{2})?$/ } @files;
     $this->trace("cpp files:", @cpp_files, "\n");
     for (@cpp_files){
-        my $source = $_;
-        $this->trace("Skipping '$source', all ready up-to-date\n") and next unless $this->compilation_required($source);
         unless ($this->compile($_, $include_folders)){
-            push @{$this->{error_messages}}, "Compilation of $source failed";
+            push @{$this->{error_messages}}, "Compilation of $_ failed";
             return 0 if $this->{stop_on_fail} eq 'on';
         }
     }
@@ -184,10 +180,12 @@ sub compile_files{
 # compiles one file to it's .o form
 sub compile{
     my $this = shift;
-    my ($input_file, $input_folder, $input_suffix) = fileparse(shift);
+    my $input = shift;
     my $include_folders = shift;
-    $input_file =~ s/\.c([p\+]{2})?$//;
+    $this->trace("Skipping '$source', all ready up-to-date\n") and next unless $this->compilation_required($input);
     
+    my ($input_file, $input_folder, $input_suffix) = fileparse($input);
+    $input_file =~ s/\.c([p\+]{2})?$//;
     my $output_folder = catfile($this->{obj_folder}, $input_folder);
     push @{$this->{error_messages}}, "Object subfolder '$output_folder' could not be created" and return 0
         unless -d $output_folder or make_path($output_folder);
@@ -200,7 +198,7 @@ sub compile{
 
     my $external_command = $this->{compiler} . ' -MMD -MF ' . $dep_info_file;
     $external_command .= ' -c ' . $this->{compiler_flags};
-    $external_command .= ' ' . $_ . ' -o ' . $output_file;
+    $external_command .= ' ' . $input . ' -o ' . $output_file;
     $external_command .= $include_folders;
     $this->trace("> " . $external_command . "\n");
     system($external_command);
@@ -228,9 +226,16 @@ sub compilation_required{
     while(<DEP>){
         $dep = $_;
         $dep =~ s/^\s*//;
-        $dep =~ s/\s*\\?\s*$/\n/;
-        $dep_last_modified = (stat($_))[$mtime];
-        $this->trace("found a newer file!\n") and return 1 if $obj_last_modified < $dep_last_modified;
+        $dep =~ s/\s*\\?\s*$//;
+        $dep_last_modified = (stat($dep))[$mtime];
+        $this->trace("found a newer file!\n") and return 1 if $dep_last_modified and $obj_last_modified < $dep_last_modified;
+        unless ($dep_last_modified) {
+            $this->trace("  timestamp was not found, closer look at '$dep'\n");
+            for(split " ", $dep){
+                $dep_last_modified = (stat($_))[$mtime];
+                $this->trace("found a newer file!\n") and return 1 if $dep_last_modified and $obj_last_modified < $dep_last_modified;
+            }
+        }
     }
     return 0;
 }
