@@ -21,8 +21,16 @@ my %default_config = (
     link_libraries => '',
     mode => 'executable',
     dep_info => 'dep_info',
+    logging => '1', # minimal, info verbose debug
 );
-my $pp_version = '0.6.0';
+my $pp_version = '1.1.0';
+
+my %log_level = (
+    minimal => 0,
+    info => 1,
+    verbose => 2,
+    debug => 3,
+);
 
 sub new{
     my $class_name = shift;
@@ -76,7 +84,7 @@ sub negotiate_platform{
     );
     exists $OS_mappings{$^O} and $this->{current_OS} = $OS_mappings{$^O} or die
         "$^O is not currently a supported platform. If you think it should or is, please report this.";
-    $this->trace("    platform determined to be '$this->{current_OS}'\n");
+    $this->trace($log_level{'debug'}, "    platform determined to be '$this->{current_OS}'\n");
     return 1;
 }
 
@@ -111,29 +119,29 @@ sub set_options{
 sub build{
     $this = shift;
     fancy_header();
-    $this->trace("Determining platform details...\n");
+    $this->trace($log_level{'info'}, "Determining platform details...\n");
     $this->negotiate_platform();
-    $this->trace("\nEnsureing all expected folders exist...\n");
+    $this->trace($log_level{'info'}, "\nEnsureing all expected folders exist...\n");
     push @{$this->{error_messages}}, "Failed to create folders" and return 0
         unless $this->ensure_folders_exist();
 
-    $this->trace("\nCompiling all source files in source folders...\n");
+    $this->trace($log_level{'info'}, "\nCompiling all source files in source folders...\n");
     push @{$this->{error_messages}}, "Failed to compile files" and return 0
         unless $this->compile_files();
 
     if($this->{mode} eq 'executable'){
-        $this->trace("\nLinking project...\n");
+        $this->trace($log_level{'info'}, "\nLinking project...\n");
         push @{$this->{error_messages}}, "Failed to link program" and return 0
             unless $this->link_program();
     } elsif ($this->{mode} eq 'static'){
-        $this->trace("\nCreating static library...\n");
+        $this->trace($log_level{'info'}, "\nCreating static library...\n");
         push @{$this->{error_messages}}, "Failed to build library" and return 0
             unless $this->build_static_library();
     } else {
-        $this->trace("\nNo post compile process selected ('$this->{mode}')\n");
+        $this->trace($log_level{'info'}, "\nNo post compile process selected ('$this->{mode}')\n");
     }
 
-    $this->trace("\nSuccess!\n\n");
+    $this->trace($log_level{'info'}, "\nSuccess!\n\n");
     delete $this->{error_messages};
     return 1;
 }
@@ -152,22 +160,22 @@ sub ensure_folders_exist{
 sub compile_files{
     my $this = shift;
     local $, = "\n";
-    $this->trace("parsing src_folders string => $this->{src_folders}\n");
+    $this->trace($log_level{'verbose'}, "parsing src_folders string => $this->{src_folders}\n");
     my $src_folders_to_search = parse_folder_matching_string($this->{src_folders});
     my @files;
-    $this->trace("including folders: @{$src_folders_to_search->{include}}\n");
-    $this->trace("excluding folders: @{$src_folders_to_search->{exclude}}\n\n");
+    $this->trace($log_level{'verbose'}, "including folders: @{$src_folders_to_search->{include}}\n");
+    $this->trace($log_level{'verbose'}, "excluding folders: @{$src_folders_to_search->{exclude}}\n\n");
     for (@{$src_folders_to_search->{include}}){
         push @files, files_in_folder($_, @{$src_folders_to_search->{exclude}});
     }    
-    $this->trace("\nparsing inc_folders string => $this->{inc_folders}\n");
+    $this->trace($log_level{'verbose'}, "\nparsing inc_folders string => $this->{inc_folders}\n");
     my $include_folders = "";
     for (@{parse_folder_matching_string($this->{inc_folders})->{include}}){
         $include_folders .= ' -I ' . $_;
     }
-    $this->trace("\nList of all files:", @files, "\n");
+    $this->trace($log_level{'debug'}, "\nList of all files:", @files, "\n");
     my @cpp_files = grep { /\.c([p\+]{2})?$/ } @files;
-    $this->trace("cpp files:", @cpp_files, "\n");
+    $this->trace($log_level{'debug'}, "cpp files:", @cpp_files, "\n");
     for (@cpp_files){
         unless ($this->compile($_, $include_folders)){
             push @{$this->{error_messages}}, "Compilation of $_ failed";
@@ -182,7 +190,7 @@ sub compile{
     my $this = shift;
     my $input = shift;
     my $include_folders = shift;
-    $this->trace("Skipping '$source', all ready up-to-date\n") and next unless $this->compilation_required($input);
+    $this->trace($log_level{'info'}, "  Skipping '$input', all ready up-to-date\n") and next unless $this->compilation_required($input);
     
     my ($input_file, $input_folder, $input_suffix) = fileparse($input);
     $input_file =~ s/\.c([p\+]{2})?$//;
@@ -200,7 +208,7 @@ sub compile{
     $external_command .= ' -c ' . $this->{compiler_flags};
     $external_command .= ' ' . $input . ' -o ' . $output_file;
     $external_command .= $include_folders;
-    $this->trace("> " . $external_command . "\n");
+    $this->trace($log_level{'minimal'}, "> " . $external_command . "\n");
     system($external_command);
     my $result = $? >> 8;
     return 0 if $result != 0;
@@ -220,7 +228,7 @@ sub compilation_required{
 
     my $obj_last_modified = (stat($dep_info_file))[$mtime];
     my $dep_last_modified = (stat($input))[$mtime];
-    $this->trace("found a newer file!\n") and return 1 if $obj_last_modified < $dep_last_modified;
+    $this->trace($log_level{'debug'}, "found a newer file!\n") and return 1 if $obj_last_modified < $dep_last_modified;
     return 1 unless -f $dep_info_file and open DEP, $dep_info_file;
     my $dep = <DEP>; # This first line is output file and the input file, we just checked this
     while(<DEP>){
@@ -228,9 +236,9 @@ sub compilation_required{
         $dep =~ s/^\s*//;
         $dep =~ s/\s*\\?\s*$//;
         $dep_last_modified = (stat($dep))[$mtime];
-        $this->trace("found a newer file!\n") and return 1 if $dep_last_modified and $obj_last_modified < $dep_last_modified;
+        $this->trace($log_level{'debug'}, "found a newer file!\n") and return 1 if $dep_last_modified and $obj_last_modified < $dep_last_modified;
         unless ($dep_last_modified) {
-            $this->trace("  timestamp was not found, closer look at '$dep'\n");
+            $this->trace($log_level{'debug'}, "  timestamp was not found, closer look at '$dep'\n");
             for(split " ", $dep){
                 $dep_last_modified = (stat($_))[$mtime];
                 $this->trace("found a newer file!\n") and return 1 if $dep_last_modified and $obj_last_modified < $dep_last_modified;
@@ -252,7 +260,7 @@ sub link_program{
         $external_command .= " -l" . $_;
     }
     $external_command .= ' -o ' . $this->{program_name};
-    $this->trace("> $external_command\n");
+    $this->trace($log_level{'minimal'}, "> $external_command\n");
     system($external_command);
     my $result = $? >> 8;
     return 0 if $result != 0;
@@ -267,7 +275,7 @@ sub build_static_library{
     for(@object_files){
         $external_command .= ' ' . $_;
     }
-    $this->trace("> $external_command\n");
+    $this->trace($log_level{'minimal'}, "> $external_command\n");
     system($external_command);
     return 1;
 }
@@ -288,34 +296,34 @@ sub parse_folder_matching_string{
         exclude => []
     );
     for (@folder_elements){
-        $this->trace("  examing token '$_'\n");
+        $this->trace($log_level{'verbose'}, "  examing token '$_'\n");
         unless($_ =~ /\^/){
             # this has no meta data, just add it the include list and move on
-            $this->trace("    basic token, including '$_'\n");
+            $this->trace($log_level{'verbose'}, "    basic token, including '$_'\n");
             push @{$results{include}}, $_;
             next;
         }
         my ($meta_data, $folder, $escape_string);
         # these two refex matches should up the last ^ or ~ character, but not capture them
         ($meta_data, $folder) = /(.*)\^(.*)/;
-        $this->trace("    meta data is '$meta_data'\n");
+        $this->trace($log_level{'verbose'}, "    meta data is '$meta_data'\n");
         ($meta_data, $escape_string) = $meta_data =~ /(.*)~(.*)^/ and $folder = $escape_string . $folder if $meta_data =~ /~/;
         # These two take the last instance of the match, hence the '.*' at the start of the pattern
         if($meta_data =~ /(win|nix|osx)/){
-            $this->trace("    OS conditional\n");
+            $this->trace($log_level{'verbose'}, "    OS conditional\n");
             my ($OS) = $meta_data =~ /.*((win|nix|osx))/;
             unless($OS eq $this->{current_OS}){
-                $this->trace("    skipping, this OS is not '$OS'\n");
+                $this->trace($log_level{'verbose'}, "    skipping, this OS is not '$OS'\n");
                 next;
             }
         }
         # my ($arch) = $meta_data =~ /.*((x86|x64))/;
-        $this->trace("    x86/x64 conditionals not yet supported\n");
+        $this->trace($log_level{'verbose'}, "    x86/x64 conditionals not yet supported\n");
         if($meta_data =~ /!/){
-            $this->trace("    excluding '$folder'\n");
+            $this->trace($log_level{'verbose'}, "    excluding '$folder'\n");
             push @results{exclude}, $folder;
         } else {
-            $this->trace("    including '$folder'\n");
+            $this->trace($log_level{'verbose'}, "    including '$folder'\n");
             push @results{include}, $folder;
         }
     }
@@ -339,17 +347,17 @@ sub config_options{
 sub files_in_folder{
     my $folder = shift;
     my @excludes = @_;
-    $this->trace("Generating list of files in '$folder'\n");
+    $this->trace($log_level{'verbose'}, "Generating list of files in '$folder'\n");
     if (-f $folder){
-        $this->trace("  this is a file, I assume you want it compiled\n");
+        $this->trace($log_level{'verbose'}, "  this is a file, I assume you want it compiled\n");
         return ($folder);
     }
     
-    opendir FOLDER, $folder or $this->trace("  failed to open '$folder'\n");
+    opendir FOLDER, $folder or $this->trace($log_level{'info'}, "  failed to open '$folder'\n");
     my @files;
     FILELOOP: while (readdir FOLDER){
-        $this->trace("  $_ (meta folder) - skipping\n") and next if /^\.\.?$/;
-        $this->trace("  $_\n");
+        $this->trace($log_level{'verbose'}, "  $_ (meta folder) - skipping\n") and next if /^\.\.?$/;
+        $this->trace($log_level{'verbose'}, "  $_\n");
         my $listing = $folder . '/' . $_;
 
         for $exclude (@excludes){
@@ -366,11 +374,11 @@ sub files_in_folder{
 }
 
 sub fancy_header{
-    $this->trace("# - - - - - - - - - - - - - - - -\n");
-    $this->trace("# Welcome to the pinkpill build system\n");
-    $this->trace("# Version $pp_version\n");
-    $this->trace("# Written by thecoshman\n");
-    $this->trace("# - - - - - - - - - - - - - - - -\n\n");
+    $this->trace($log_level{'minimal'}, "# - - - - - - - - - - - - - - - -\n");
+    $this->trace($log_level{'minimal'}, "# Welcome to the pinkpill build system\n");
+    $this->trace($log_level{'minimal'}, "# Version $pp_version\n");
+    $this->trace($log_level{'minimal'}, "# Written by thecoshman\n");
+    $this->trace($log_level{'minimal'}, "# - - - - - - - - - - - - - - - -\n\n");
 }
 
 sub error_logs{
@@ -380,9 +388,10 @@ sub error_logs{
 
 sub trace{
   my $this = shift;
+  my $level = shift;
   my @messages = @_;
-  print @messages if $this->{verbose} eq 'on';
-  # Could possibly add support for other forms logging, like to file...
+  print @messages if $level <= $this->{'logging'};
+  return 1;
 }
 
 1;
