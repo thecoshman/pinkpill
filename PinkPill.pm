@@ -23,7 +23,7 @@ my %default_config = (
     dep_info => 'dep_info',
     logging => '1', # minimal, info verbose debug
 );
-my $pp_version = '1.1.0';
+my $pp_version = '1.2.0';
 
 my %log_level = (
     minimal => 0,
@@ -218,30 +218,42 @@ sub compile{
 # checks if *.cpp needs to be recompiled to *.o
 sub compilation_required{
     my $this = shift;
-    my $mtime = 9; # It is field nine from 'stat' that contains the modified time for a file
     my $input = shift;
-    my $output_file = catfile($this->{obj_folder}, $input);
-    $output_file =~  s/\.c([p\+]{2})?$/\.o/;
+    my $mtime = 9; # It is field nine from 'stat' that contains the modified time for a file
+
+    my $input_last_modified = (stat($input))[$mtime];
+    
+    my $output_obj_file = catfile($this->{obj_folder}, $input);
+    $output_obj_file =~  s/\.c([p\+]{2})?$/\.o/;
+    my $output_last_modified = (stat($output_obj_file))[$mtime];
+
+    $this->trace($log_level{'verbose'}, "source file modified!\n") and return 1 if $output_last_modified < $input_last_modified;
 
     my $dep_info_file = catfile($this->{dep_info}, $input);
     $dep_info_file =~ s/\.c([p\+]{2})?$/\.d/;
+    
+    $this->trace($log_level{'verbose'}, "dependency information cannot be read!\n") and return 1 unless -f $dep_info_file and open DEP, $dep_info_file;
 
-    my $obj_last_modified = (stat($dep_info_file))[$mtime];
-    my $dep_last_modified = (stat($input))[$mtime];
-    $this->trace($log_level{'debug'}, "found a newer file!\n") and return 1 if $obj_last_modified < $dep_last_modified;
-    return 1 unless -f $dep_info_file and open DEP, $dep_info_file;
+    my $dep_info_last_modified = (stat($dep_info_file))[$mtime];
+    $this->trace($log_level{'verbose'}, "dependency information out of date!\n") and return 1 if $dep_info_last_modified < $input_last_modified;
+
     my $dep = <DEP>; # This first line is output file and the input file, we just checked this
+    $dep =~ s/^\s*//;
+    $this->trace($log_level{'debug'}, "DEP File line: $dep"); # but we will output it anyway for debug purposes 
+
     while(<DEP>){
         $dep = $_;
         $dep =~ s/^\s*//;
+        $this->trace($log_level{'debug'}, "DEP File line: $dep");
         $dep =~ s/\s*\\?\s*$//;
-        $dep_last_modified = (stat($dep))[$mtime];
-        $this->trace($log_level{'debug'}, "found a newer file!\n") and return 1 if $dep_last_modified and $obj_last_modified < $dep_last_modified;
-        unless ($dep_last_modified) {
-            $this->trace($log_level{'debug'}, "  timestamp was not found, closer look at '$dep'\n");
+        my $dependency_last_modified = (stat($dep))[$mtime];
+        $this->trace($log_level{'verbose'}, "  found an updated dependency!\n") and return 1 if $dependency_last_modified and $output_last_modified < $dependency_last_modified;
+        unless ($dependency_last_modified) {
+            $this->trace($log_level{'debug'}, "  timestamp could not be read\n");
             for(split " ", $dep){
-                $dep_last_modified = (stat($_))[$mtime];
-                $this->trace("found a newer file!\n") and return 1 if $dep_last_modified and $obj_last_modified < $dep_last_modified;
+                $this->trace($log_level{'debug'}, "  DEP File sub-line: $_\n");
+                $dependency_last_modified = (stat($_))[$mtime];
+                $this->trace($log_level{'verbose'}, "  found an updated dependency!\n") and return 1 if $dependency_last_modified and $output_last_modified < $dependency_last_modified;
             }
         }
     }
