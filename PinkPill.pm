@@ -23,7 +23,7 @@ my %default_config = (
     dep_info => 'dep_info',
     logging => '1', # minimal, info verbose debug
 );
-my $pp_version = '1.2.0';
+my $pp_version = '1.2.1';
 
 my %log_level = (
     minimal => 0,
@@ -365,9 +365,9 @@ sub files_in_folder{
         return ($folder);
     }
     
-    opendir FOLDER, $folder or $this->trace($log_level{'info'}, "  failed to open '$folder'\n");
+    opendir my $dir, $folder or $this->trace($log_level{'info'}, "  failed to open '$folder'\n");
     my @files;
-    FILELOOP: while (readdir FOLDER){
+    FILELOOP: while (readdir $dir){
         $this->trace($log_level{'verbose'}, "  $_ (meta folder) - skipping\n") and next if /^\.\.?$/;
         $this->trace($log_level{'verbose'}, "  $_\n");
         my $listing = $folder . '/' . $_;
