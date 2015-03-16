@@ -27,7 +27,7 @@ Version 5.0.0 - Hair brain ideas now! This might introduce distributed compilati
 
 How to Help
 ===========
-I am more then willing to except help, so please do feel free to fork and issue pull requests or use the issue tracker to offer suggestions for new features or improvements, or for reporting bugs. If you choose to start using this build system I would love to know about it!
+I am more then willing to accept help, so please do feel free to fork and issue pull requests or use the issue tracker to offer suggestions for new features or improvements, or for reporting bugs. If you choose to start using this build system I would love to know about it!
 
 A note on obfuscated Perl: Yes, we all know that Perl can be twisted into some very complex stuff, but for the most part I try avoid doing so. Perl is not my primary language, so I like to keep the code reasonably readable. And no, there are not hard and fast rules I am following for 'reasonably readable'; if I get on a bit of a binge, I might get more comfortable with more inverted forms, but I might later comeback to it and decide to make things a bit more explicate.
 
