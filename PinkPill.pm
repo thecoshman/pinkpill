@@ -374,7 +374,7 @@ sub files_in_folder{
 
         for $exclude (@excludes){
             #$this->trace("Cheacking '$_' for exclusion against '$exclude_folder'\n");
-            next FILELOOP if $listing eq $exclude;
+            print "excluding $_" and next FILELOOP if $listing eq $exclude;
         }
         # if files, add 'folder/file' to the list of files 
         push @files, $listing if -f $listing;
